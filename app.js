@@ -1,6 +1,6 @@
 let players = [];
+let matches = [];
 let scorePenalty = 0;
-let matchHistory = [];
 
 function initializeGame() {
   const playerCount = parseInt(document.getElementById("player-count").value);
@@ -13,83 +13,112 @@ function initializeGame() {
 
   players = Array.from({ length: playerCount }, (_, i) => ({
     name: `Player ${i + 1}`,
-    score: 0
+    score: 0,
   }));
-  matchHistory = [];
 
-  saveToLocalStorage();
+  displayPlayerNameInputs(playerCount);
+}
 
-  updateMatchHistoryTable();
+function displayPlayerNameInputs(playerCount) {
+  const nameInputSection = document.getElementById("name-input-section");
+  const playerNamesDiv = document.getElementById("player-names");
+
+  playerNamesDiv.innerHTML = "";
+  for (let i = 0; i < playerCount; i++) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = `Player ${i + 1} Name`;
+    input.dataset.index = i;
+    playerNamesDiv.appendChild(input);
+  }
+
+  nameInputSection.style.display = "block";
+  document.querySelector(".match-input").style.display = "none";
+}
+
+function startGameWithNames() {
+  const nameInputs = document.querySelectorAll("#player-names input");
+  nameInputs.forEach((input) => {
+    const index = parseInt(input.dataset.index);
+    const name = input.value.trim();
+    if (name) {
+      players[index].name = name;
+    }
+  });
+
+  localStorage.setItem("players", JSON.stringify(players));
+  localStorage.setItem("scorePenalty", scorePenalty);
+
   populateWinnerDropdown();
+  updateMatchTable();
 
   document.querySelector(".match-input").style.display = "block";
+  document.getElementById("name-input-section").style.display = "none";
 }
 
 function logMatch() {
   const winnerIndex = parseInt(document.getElementById("match-winner").value);
-  const totalPenalty = scorePenalty * (players.length - 1);
+  const matchNumber = matches.length + 1;
 
-  // Update scores
-  players.forEach((player, index) => {
-    if (index === winnerIndex) {
-      player.score += totalPenalty;
-    } else {
-      player.score -= scorePenalty;
-    }
+  matches.push({
+    matchNumber: matchNumber,
+    winnerIndex: winnerIndex,
   });
 
-  // Add to match history
-  matchHistory.push({
-    matchNumber: matchHistory.length + 1,
-    winnerIndex,
-    scores: players.map(player => `${player.name}: ${player.score}`).join(", ")
-  });
-
-  saveToLocalStorage();
-  updateMatchHistoryTable();
+  localStorage.setItem("matches", JSON.stringify(matches));
+  updateMatchTable();
 }
 
-function removeMatch(matchIndex) {
-  // Remove match from history
-  matchHistory.splice(matchIndex, 1);
+function calculateScores() {
+  players.forEach((player) => (player.score = 0));
 
-  // Recalculate all scores
-  players = players.map(player => ({ name: player.name, score: 0 }));
-  matchHistory.forEach(match => {
+  matches.forEach(({ winnerIndex }) => {
     const totalPenalty = scorePenalty * (players.length - 1);
+
     players.forEach((player, index) => {
-      if (index === match.winnerIndex) {
+      if (index === winnerIndex) {
         player.score += totalPenalty;
       } else {
         player.score -= scorePenalty;
       }
     });
-    match.scores = players.map(player => `${player.name}: ${player.score}`).join(", ");
   });
 
-  saveToLocalStorage();
-  updateMatchHistoryTable();
+  localStorage.setItem("players", JSON.stringify(players));
+  updateScoreTable();
 }
 
-function clearGame() {
-  if (confirm("Are you sure you want to clear the game?")) {
-    localStorage.clear();
-    location.reload();
-  }
+function removeMatch(matchNumber) {
+  matches = matches.filter((match) => match.matchNumber !== matchNumber);
+  localStorage.setItem("matches", JSON.stringify(matches));
+  updateMatchTable();
 }
 
-function updateMatchHistoryTable() {
-  const tableBody = document.querySelector("#match-history-table tbody");
-  tableBody.innerHTML = "";
+function updateMatchTable() {
+  const matchTableBody = document.querySelector("#match-table tbody");
+  matchTableBody.innerHTML = "";
 
-  matchHistory.forEach((match, index) => {
+  matches.forEach(({ matchNumber, winnerIndex }) => {
     const row = document.createElement("tr");
     row.innerHTML = `
-      <td>${match.matchNumber}</td>
-      <td>${players[match.winnerIndex].name}</td>
-      <td>${match.scores}</td>
-      <td><button onclick="removeMatch(${index})">Remove</button></td>
-    `;
+      <td>${matchNumber}</td>
+      <td>${players[winnerIndex].name}</td>
+      <td>
+        <button onclick="removeMatch(${matchNumber})">Remove</button>
+      </td>`;
+    matchTableBody.appendChild(row);
+  });
+}
+
+function updateScoreTable() {
+  const tableBody = document.querySelector("#score-table tbody");
+  tableBody.innerHTML = "";
+
+  players = JSON.parse(localStorage.getItem("players")) || players;
+
+  players.forEach((player) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `<td>${player.name}</td><td>${player.score}</td>`;
     tableBody.appendChild(row);
   });
 }
@@ -106,21 +135,21 @@ function populateWinnerDropdown() {
   });
 }
 
-function saveToLocalStorage() {
-  localStorage.setItem("players", JSON.stringify(players));
-  localStorage.setItem("scorePenalty", scorePenalty);
-  localStorage.setItem("matchHistory", JSON.stringify(matchHistory));
+function clearGame() {
+  if (confirm("Are you sure you want to clear the game?")) {
+    localStorage.clear();
+    location.reload();
+  }
 }
 
-// Initialize data from localStorage on page load
 window.onload = function () {
   if (localStorage.getItem("players")) {
     players = JSON.parse(localStorage.getItem("players"));
+    matches = JSON.parse(localStorage.getItem("matches")) || [];
     scorePenalty = parseInt(localStorage.getItem("scorePenalty"));
-    matchHistory = JSON.parse(localStorage.getItem("matchHistory")) || [];
 
-    updateMatchHistoryTable();
     populateWinnerDropdown();
+    updateMatchTable();
     document.querySelector(".match-input").style.display = "block";
   }
 };
